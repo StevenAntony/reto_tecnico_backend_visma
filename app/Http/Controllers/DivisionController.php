@@ -6,9 +6,28 @@ use App\Models\Division;
 use App\Models\SubDivision;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use App\Validator\Message;
 
 class DivisionController extends Controller
 {
+    private $response = [
+        'data' => [],
+        'success' => true,
+        'message' => '',
+        'error' => [
+            'code' => '--',
+            'message' => []
+        ]
+    ];
+
+    public function notFoundDivision() {
+        $this->response['success'] = false;
+        $this->response['message'] = 'División no encontrado';
+        $this->response['error']['code'] = '404';
+        $this->response['error']['message'] = 'División no encontrado';
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -24,7 +43,10 @@ class DivisionController extends Controller
                         ->where('division.di_estado','=',1)
                         ->groupBy('division.di_id')
                         ->get();
-        return response()->json($division, 200);
+
+        $this->response['data'] = $division;
+        $this->response['message'] = 'Registros encontrados';
+        return response()->json($this->response, 200);
     }
 
     /**
@@ -45,6 +67,21 @@ class DivisionController extends Controller
      */
     public function store(Request $request)
     {
+        $validator = Validator::make($request->all(),[
+            'itemNombre' => 'required|string|unique:division,di_nombre|max:45',
+            'itemDivisionSuperior' => 'nullable|numeric',
+            'itemEmbajador' => 'required|string',
+            'itemSubDivision'=> 'nullable|array'
+        ], Message::createDivision());
+
+        if ($validator->fails()) {
+            $this->response['success'] = false;
+            $this->response['message'] = 'Verificar Datos Correctamente';
+            $this->response['error']['code'] = '400';
+            $this->response['error']['message'] =   $validator->errors();
+            return response()->json($this->response, 200);
+        }
+
         $subdivision = [];
         foreach ($request->itemSubDivision as $key => $value) {
             array_push($subdivision,new SubDivision([
@@ -61,7 +98,9 @@ class DivisionController extends Controller
         $division->save();
         $division->subDivisiones()->saveMany($subdivision);
 
-        return response()->json(true, 200);
+        $this->response['data'] = $division;
+        $this->response['message'] = 'División registrado correctamente';
+        return response()->json($this->response, 200);
     }
 
     /**
@@ -73,7 +112,15 @@ class DivisionController extends Controller
     public function show($id)
     {
         $division = Division::find($id);
-        return response()->json($division, 200);
+        if(empty($division)){
+            $this->notFoundDivision();
+            return response()->json($this->response, 200);
+        }
+
+        $this->response['data'] = $division;
+        $this->response['message'] = 'División encontrada';
+
+        return response()->json($this->response, 200);
     }
 
     /**
@@ -96,13 +143,40 @@ class DivisionController extends Controller
      */
     public function update(Request $request, $id)
     {
+
         $division = Division::find($id);
+
+        $this->response['success'] = false;
+        if(empty($division)){
+            $this->notFoundDivision();
+            return response()->json($this->response, 200);
+        }
+
+        $roleItemNombre = $division->di_nombre == $request->input('itemNombre') ? 'required|string|max:45' : 'required|string|unique:division,di_nombre|max:45';
+
+        $validator = Validator::make($request->all(),[
+            'itemNombre' => $roleItemNombre,
+            'itemDivisionSuperior' => 'nullable|numeric',
+            'itemEmbajador' => 'required|string'
+        ], Message::editarDivision());
+
+        if ($validator->fails()) {
+            $this->response['message'] = 'Verificar Datos Correctamente';
+            $this->response['error']['code'] = '400';
+            $this->response['error']['message'] =   $validator->errors();
+            return response()->json($this->response, 200);
+        }
+
         $division->di_nombre = $request->itemNombre;
         $division->ds_id = empty($request->itemDivisionSuperior) ? null : $request->itemDivisionSuperior;
         $division->di_embajador = empty($request->itemEmbajador) ? '--' : $request->itemEmbajador;
         $division->save();
 
-        return response()->json(true, 200);
+        $this->response['success'] = true;
+        $this->response['data'] = $division;
+        $this->response['message'] = 'División actualizado correctamente';
+
+        return response()->json($this->response, 200);
     }
 
     /**
@@ -114,10 +188,18 @@ class DivisionController extends Controller
     public function destroy($id)
     {
         $division = Division::find($id);
+
+        if(empty($division)){
+            $this->notFoundDivision();
+            return response()->json($this->response, 200);
+        }
         $division->di_estado = 0;
         $division->save();
 
-        return response()->json(true, 200);
+        $this->response['data'] = [];
+        $this->response['message'] = 'División Eliminada';
+
+        return response()->json($this->response, 200);
     }
 
     /**
@@ -127,8 +209,16 @@ class DivisionController extends Controller
 
     public function listarSubdivision($id) {
         $division = Division::find($id);
+
+        if(empty($division)){
+            $this->notFoundDivision();
+            return response()->json($this->response, 200);
+        }
+
         $subdivision = $division->subDivisiones()->get();
 
-        return response()->json($subdivision, 200);
+        $this->response['data'] = $subdivision;
+        $this->response['message'] = 'Listado de subDivisiones encontrados';
+        return response()->json($this->response, 200);
     }
 }
