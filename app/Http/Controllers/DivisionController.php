@@ -38,7 +38,7 @@ class DivisionController extends Controller
         $division = Division::select(['division.di_nombre','division.di_id','division.di_colaborador','division.di_embajador',
                         'division.di_nivel',DB::raw('IF(ds.ds_id is null,"--",ds.ds_nombre) as ds_nombre'),
                         DB::raw('COUNT(sd.sd_id) as cantidadSubdivision')])
-                        ->join('subdivision as sd','division.di_id','sd.di_id')
+                        ->leftjoin('subdivision as sd','division.di_id','sd.di_id')
                         ->leftjoin('division_superior as ds','division.ds_id','ds.ds_id')
                         ->where('division.di_estado','=',1)
                         ->groupBy('division.di_id')
